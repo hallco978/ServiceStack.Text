@@ -15,6 +15,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Reflection;
+using System.Linq;
 using ServiceStack.Text.Common;
 
 namespace ServiceStack.Text.Jsv
@@ -29,8 +31,8 @@ namespace ServiceStack.Text.Jsv
             if (DeserializerCache.TryGetValue(type, out parseFn)) return (T)parseFn(value);
 
             var genericType = typeof(T).MakeGenericType(type);
-            var mi = genericType.GetMethod("DeserializeFromString", new[] { typeof(string) });
-            parseFn = (ParseStringDelegate)Delegate.CreateDelegate(typeof(ParseStringDelegate), mi);
+            var mi = genericType.GetMethodInfo("DeserializeFromString", new[] { typeof(string) });
+            parseFn = (ParseStringDelegate)mi.MakeDelegate(typeof(ParseStringDelegate));
 
             Dictionary<Type, ParseStringDelegate> snapshot, newCache;
             do

@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using ServiceStack.Text.Common;
 using ServiceStack.Text.Json;
 using ServiceStack.Text.Jsv;
 
-
-#if WINDOWS_PHONE
+#if WINDOWS_PHONE && !WP8
 using ServiceStack.Text.WP;
 #endif
 
@@ -23,198 +23,256 @@ namespace ServiceStack.Text
             Reset();
         }
 
-        [ThreadStatic]
-        private static bool? tsConvertObjectTypesIntoStringDictionary;
+        public static JsConfigScope BeginScope()
+        {
+            return new JsConfigScope();
+        }
+
+        public static JsConfigScope With(
+            bool? convertObjectTypesIntoStringDictionary = null,
+            bool? tryToParsePrimitiveTypeValues = null,
+			bool? tryToParseNumericType = null,
+            bool? includeNullValues = null,
+            bool? excludeTypeInfo = null,
+            bool? includeTypeInfo = null,
+            bool? emitCamelCaseNames = null,
+            bool? emitLowercaseUnderscoreNames = null,
+            JsonDateHandler? dateHandler = null,
+            JsonTimeSpanHandler? timeSpanHandler = null,
+            bool? preferInterfaces = null,
+            bool? throwOnDeserializationError = null,
+            string typeAttr = null,
+            Func<Type, string> typeWriter = null,
+            Func<string, Type> typeFinder = null,
+			bool? treatEnumAsInteger = null,
+            bool? alwaysUseUtc = null,
+            bool? assumeUtc = null,
+            bool? escapeUnicode = null,
+            bool? includePublicFields = null,
+            int? maxDepth = null,
+            EmptyCtorFactoryDelegate modelFactory = null)
+        {
+            return new JsConfigScope {
+                ConvertObjectTypesIntoStringDictionary = convertObjectTypesIntoStringDictionary ?? sConvertObjectTypesIntoStringDictionary,
+                TryToParsePrimitiveTypeValues = tryToParsePrimitiveTypeValues ?? sTryToParsePrimitiveTypeValues,
+                TryToParseNumericType = tryToParseNumericType ?? sTryToParseNumericType,
+                IncludeNullValues = includeNullValues ?? sIncludeNullValues,
+                ExcludeTypeInfo = excludeTypeInfo ?? sExcludeTypeInfo,
+                IncludeTypeInfo = includeTypeInfo ?? sIncludeTypeInfo,
+                EmitCamelCaseNames = emitCamelCaseNames ?? sEmitCamelCaseNames,
+                EmitLowercaseUnderscoreNames = emitLowercaseUnderscoreNames ?? sEmitLowercaseUnderscoreNames,
+                DateHandler = dateHandler ?? sDateHandler,
+                TimeSpanHandler = timeSpanHandler ?? sTimeSpanHandler,
+                PreferInterfaces = preferInterfaces ?? sPreferInterfaces,
+                ThrowOnDeserializationError = throwOnDeserializationError ?? sThrowOnDeserializationError,
+                TypeAttr = typeAttr ?? sTypeAttr,
+                TypeWriter = typeWriter ?? sTypeWriter,
+                TypeFinder = typeFinder ?? sTypeFinder,
+                TreatEnumAsInteger = treatEnumAsInteger ?? sTreatEnumAsInteger,
+                AlwaysUseUtc = alwaysUseUtc ?? sAlwaysUseUtc,
+                AssumeUtc = assumeUtc ?? sAssumeUtc,
+                EscapeUnicode = escapeUnicode ?? sEscapeUnicode,
+                IncludePublicFields = includePublicFields ?? sIncludePublicFields,
+                MaxDepth = maxDepth ?? sMaxDepth,
+                ModelFactory = modelFactory ?? ModelFactory,
+            };
+        }
+
         private static bool? sConvertObjectTypesIntoStringDictionary;
         public static bool ConvertObjectTypesIntoStringDictionary
         {
             get
             {
-                return tsConvertObjectTypesIntoStringDictionary ?? sConvertObjectTypesIntoStringDictionary ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.ConvertObjectTypesIntoStringDictionary: null)
+                    ?? sConvertObjectTypesIntoStringDictionary 
+                    ?? false;
             }
             set
             {
-                tsConvertObjectTypesIntoStringDictionary = value;
                 if (!sConvertObjectTypesIntoStringDictionary.HasValue) sConvertObjectTypesIntoStringDictionary = value;
             }
         }
 
-        [ThreadStatic]
-        private static bool? tsTryToParsePrimitiveTypeValues;
         private static bool? sTryToParsePrimitiveTypeValues;
         public static bool TryToParsePrimitiveTypeValues
         {
             get
             {
-                return tsTryToParsePrimitiveTypeValues ?? sTryToParsePrimitiveTypeValues ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.TryToParsePrimitiveTypeValues: null)
+                    ?? sTryToParsePrimitiveTypeValues 
+                    ?? false;
             }
             set
             {
-                tsTryToParsePrimitiveTypeValues = value;
                 if (!sTryToParsePrimitiveTypeValues.HasValue) sTryToParsePrimitiveTypeValues = value;
             }
         }
 
-        [ThreadStatic]
-        private static bool? tsIncludeNullValues;
+		private static bool? sTryToParseNumericType;
+		public static bool TryToParseNumericType
+		{
+			get
+			{
+				return (JsConfigScope.Current != null ? JsConfigScope.Current.TryToParseNumericType : null)
+					?? sTryToParseNumericType
+					?? false;
+			}
+			set
+			{
+				if (!sTryToParseNumericType.HasValue) sTryToParseNumericType = value;
+			}
+		}
+
         private static bool? sIncludeNullValues;
         public static bool IncludeNullValues
         {
             get
             {
-                return tsIncludeNullValues ?? sIncludeNullValues ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.IncludeNullValues: null)
+                    ?? sIncludeNullValues 
+                    ?? false;
             }
             set
             {
-                tsIncludeNullValues = value;
                 if (!sIncludeNullValues.HasValue) sIncludeNullValues = value;
             }
         }
 
-        [ThreadStatic]
-        private static bool? tsTreatEnumAsInteger;
         private static bool? sTreatEnumAsInteger;
         public static bool TreatEnumAsInteger
         {
             get
             {
-                return tsTreatEnumAsInteger ?? sTreatEnumAsInteger ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.TreatEnumAsInteger: null)
+                    ?? sTreatEnumAsInteger 
+                    ?? false;
             }
             set
             {
-                tsTreatEnumAsInteger = value;
                 if (!sTreatEnumAsInteger.HasValue) sTreatEnumAsInteger = value;
             }
         }
 
-        [ThreadStatic]
-        private static bool? tsExcludeTypeInfo;
         private static bool? sExcludeTypeInfo;
         public static bool ExcludeTypeInfo
         {
             get
             {
-                return tsExcludeTypeInfo ?? sExcludeTypeInfo ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.ExcludeTypeInfo: null)
+                    ?? sExcludeTypeInfo 
+                    ?? false;
             }
             set
             {
-                tsExcludeTypeInfo = value;
                 if (!sExcludeTypeInfo.HasValue) sExcludeTypeInfo = value;
             }
         }
 
-        [ThreadStatic]
-        private static bool? tsForceTypeInfo;
-        private static bool? sForceTypeInfo;
+        private static bool? sIncludeTypeInfo;
         public static bool IncludeTypeInfo
         {
             get
             {
-                return tsForceTypeInfo ?? sForceTypeInfo ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.IncludeTypeInfo: null)
+                    ?? sIncludeTypeInfo 
+                    ?? false;
             }
             set
             {
-                if (!tsForceTypeInfo.HasValue) tsForceTypeInfo = value;
-                if (!sForceTypeInfo.HasValue) sForceTypeInfo = value;
+                if (!sIncludeTypeInfo.HasValue) sIncludeTypeInfo = value;
             }
         }
 
-        [ThreadStatic]
-        private static string tsTypeAttr;
         private static string sTypeAttr;
         public static string TypeAttr
         {
             get
             {
-                return tsTypeAttr ?? sTypeAttr ?? JsWriter.TypeAttr;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.TypeAttr: null)
+                    ?? sTypeAttr 
+                    ?? JsWriter.TypeAttr;
             }
             set
             {
-                tsTypeAttr = value;
                 if (sTypeAttr == null) sTypeAttr = value;
                 JsonTypeAttrInObject = JsonTypeSerializer.GetTypeAttrInObject(value);
                 JsvTypeAttrInObject = JsvTypeSerializer.GetTypeAttrInObject(value);
             }
         }
 
-        [ThreadStatic]
-        private static string tsJsonTypeAttrInObject;
         private static string sJsonTypeAttrInObject;
         private static readonly string defaultJsonTypeAttrInObject = JsonTypeSerializer.GetTypeAttrInObject(TypeAttr);
         internal static string JsonTypeAttrInObject
         {
             get
             {
-                return tsJsonTypeAttrInObject ?? sJsonTypeAttrInObject ?? defaultJsonTypeAttrInObject;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.JsonTypeAttrInObject: null)
+                    ?? sJsonTypeAttrInObject 
+                    ?? defaultJsonTypeAttrInObject;
             }
             set
             {
-                tsJsonTypeAttrInObject = value;
                 if (sJsonTypeAttrInObject == null) sJsonTypeAttrInObject = value;
             }
         }
 
-        [ThreadStatic]
-        private static string tsJsvTypeAttrInObject;
         private static string sJsvTypeAttrInObject;
         private static readonly string defaultJsvTypeAttrInObject = JsvTypeSerializer.GetTypeAttrInObject(TypeAttr);
         internal static string JsvTypeAttrInObject
         {
             get
             {
-                return tsJsvTypeAttrInObject ?? sJsvTypeAttrInObject ?? defaultJsvTypeAttrInObject;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.JsvTypeAttrInObject: null)
+                    ?? sJsvTypeAttrInObject 
+                    ?? defaultJsvTypeAttrInObject;
             }
             set
             {
-                tsJsvTypeAttrInObject = value;
                 if (sJsvTypeAttrInObject == null) sJsvTypeAttrInObject = value;
             }
         }
 
-        [ThreadStatic]
-        private static Func<Type, string> tsTypeWriter;
         private static Func<Type, string> sTypeWriter;
         public static Func<Type, string> TypeWriter
         {
             get
             {
-                return tsTypeWriter ?? sTypeWriter ?? AssemblyUtils.WriteType;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.TypeWriter: null)
+                    ?? sTypeWriter 
+                    ?? AssemblyUtils.WriteType;
             }
             set
             {
-                tsTypeWriter = value;
                 if (sTypeWriter == null) sTypeWriter = value;
             }
         }
 
-        [ThreadStatic]
-        private static Func<string, Type> tsTypeFinder;
         private static Func<string, Type> sTypeFinder;
         public static Func<string, Type> TypeFinder
         {
             get
             {
-                return tsTypeFinder ?? sTypeFinder ?? AssemblyUtils.FindType;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.TypeFinder: null)
+                    ?? sTypeFinder 
+                    ?? AssemblyUtils.FindType;
             }
             set
             {
-                tsTypeFinder = value;
                 if (sTypeFinder == null) sTypeFinder = value;
             }
         }
 
-        [ThreadStatic]
-        private static JsonDateHandler? tsDateHandler;
         private static JsonDateHandler? sDateHandler;
         public static JsonDateHandler DateHandler
         {
             get
             {
-                return tsDateHandler ?? sDateHandler ?? JsonDateHandler.TimestampOffset;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.DateHandler: null)
+                    ?? sDateHandler 
+                    ?? JsonDateHandler.TimestampOffset;
             }
             set
             {
-                tsDateHandler = value;
                 if (!sDateHandler.HasValue) sDateHandler = value;
             }
         }
@@ -222,7 +280,21 @@ namespace ServiceStack.Text
         /// <summary>
         /// Sets which format to use when serializing TimeSpans
         /// </summary>
-        public static JsonTimeSpanHandler TimeSpanHandler { get; set; }
+        private static JsonTimeSpanHandler? sTimeSpanHandler;
+        public static JsonTimeSpanHandler TimeSpanHandler
+        {
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.TimeSpanHandler : null)
+                    ?? sTimeSpanHandler
+                    ?? JsonTimeSpanHandler.DurationFormat;
+            }
+            set
+            {
+                if (!sTimeSpanHandler.HasValue) sTimeSpanHandler = value;
+            }
+        }
+
 
         /// <summary>
         /// <see langword="true"/> if the <see cref="ITypeSerializer"/> is configured
@@ -230,19 +302,18 @@ namespace ServiceStack.Text
         /// to support user-friendly serialized formats, ie emitting camelCasing for JSON
         /// and parsing member names and enum values in a case-insensitive manner.
         /// </summary>
-        [ThreadStatic]
-        private static bool? tsEmitCamelCaseNames;
         private static bool? sEmitCamelCaseNames;
         public static bool EmitCamelCaseNames
         {
             // obeying the use of ThreadStatic, but allowing for setting JsConfig once as is the normal case
             get
             {
-                return tsEmitCamelCaseNames ?? sEmitCamelCaseNames ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.EmitCamelCaseNames: null)
+                    ?? sEmitCamelCaseNames 
+                    ?? false;
             }
             set
             {
-                tsEmitCamelCaseNames = value;
                 if (!sEmitCamelCaseNames.HasValue) sEmitCamelCaseNames = value;
             }
         }
@@ -251,19 +322,18 @@ namespace ServiceStack.Text
         /// <see langword="true"/> if the <see cref="ITypeSerializer"/> is configured
         /// to support web-friendly serialized formats, ie emitting lowercase_underscore_casing for JSON
         /// </summary>
-        [ThreadStatic]
-        private static bool? tsEmitLowercaseUnderscoreNames;
         private static bool? sEmitLowercaseUnderscoreNames;
         public static bool EmitLowercaseUnderscoreNames
         {
             // obeying the use of ThreadStatic, but allowing for setting JsConfig once as is the normal case
             get
             {
-                return tsEmitLowercaseUnderscoreNames ?? sEmitLowercaseUnderscoreNames ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.EmitLowercaseUnderscoreNames: null)
+                    ?? sEmitLowercaseUnderscoreNames 
+                    ?? false;
             }
             set
             {
-                tsEmitLowercaseUnderscoreNames = value;
                 if (!sEmitLowercaseUnderscoreNames.HasValue) sEmitLowercaseUnderscoreNames = value;
             }
         }
@@ -296,29 +366,83 @@ namespace ServiceStack.Text
         /// or continue regardless of deserialization errors. If <see langword="true"/>  the framework
         /// will throw; otherwise, it will parse as many fields as possible. The default is <see langword="false"/>.
         /// </summary>
-        [ThreadStatic]
-        private static bool? tsThrowOnDeserializationError;
         private static bool? sThrowOnDeserializationError;
         public static bool ThrowOnDeserializationError
         {
             // obeying the use of ThreadStatic, but allowing for setting JsConfig once as is the normal case
             get
             {
-                return tsThrowOnDeserializationError ?? sThrowOnDeserializationError ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.ThrowOnDeserializationError: null)
+                    ?? sThrowOnDeserializationError 
+                    ?? false;
             }
             set
             {
-                tsThrowOnDeserializationError = value;
                 if (!sThrowOnDeserializationError.HasValue) sThrowOnDeserializationError = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating if the framework should always convert <see cref="DateTime"/> to UTC format instead of local time. 
+        /// </summary>
+        private static bool? sAlwaysUseUtc;
+        public static bool AlwaysUseUtc
+        {
+            // obeying the use of ThreadStatic, but allowing for setting JsConfig once as is the normal case
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.AlwaysUseUtc: null)
+                    ?? sAlwaysUseUtc 
+                    ?? false;
+            }
+            set
+            {
+                if (!sAlwaysUseUtc.HasValue) sAlwaysUseUtc = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating if the framework should always assume <see cref="DateTime"/> is in UTC format if Kind is Unspecified. 
+        /// </summary>
+        private static bool? sAssumeUtc;
+        public static bool AssumeUtc
+        {
+            // obeying the use of ThreadStatic, but allowing for setting JsConfig once as is the normal case
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.AssumeUtc : null)
+                    ?? sAssumeUtc
+                    ?? false;
+            }
+            set
+            {
+                if (!sAssumeUtc.HasValue) sAssumeUtc = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating if unicode symbols should be serialized as "\uXXXX".
+        /// </summary>
+        private static bool? sEscapeUnicode;
+        public static bool EscapeUnicode
+        {
+            // obeying the use of ThreadStatic, but allowing for setting JsConfig once as is the normal case
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.EscapeUnicode : null)
+                    ?? sEscapeUnicode
+                    ?? false;
+            }
+            set
+            {
+                if (!sEscapeUnicode.HasValue) sEscapeUnicode = value;
             }
         }
 
         internal static HashSet<Type> HasSerializeFn = new HashSet<Type>();
 
-        internal static HashSet<Type> TreatValueAsRefTypes = new HashSet<Type>();
+        public static HashSet<Type> TreatValueAsRefTypes = new HashSet<Type>();
 
-        [ThreadStatic]
-        private static bool? tsPreferInterfaces;
         private static bool? sPreferInterfaces;
         /// <summary>
         /// If set to true, Interface types will be prefered over concrete types when serializing.
@@ -327,41 +451,127 @@ namespace ServiceStack.Text
         {
             get
             {
-                return tsPreferInterfaces ?? sPreferInterfaces ?? false;
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.PreferInterfaces: null)
+                    ?? sPreferInterfaces 
+                    ?? false;
             }
             set
             {
-                tsPreferInterfaces = value;
                 if (!sPreferInterfaces.HasValue) sPreferInterfaces = value;
             }
         }
 
         internal static bool TreatAsRefType(Type valueType)
         {
-            return TreatValueAsRefTypes.Contains(valueType.IsGenericType ? valueType.GetGenericTypeDefinition() : valueType);
+            return TreatValueAsRefTypes.Contains(valueType.IsGeneric() ? valueType.GenericTypeDefinition() : valueType);
         }
 
-        public static void Reset()
+
+        /// <summary>
+        /// If set to true, Interface types will be prefered over concrete types when serializing.
+        /// </summary>
+        private static bool? sIncludePublicFields;
+        public static bool IncludePublicFields
         {
-            ModelFactory = ReflectionExtensions.GetConstructorMethodToCache;
-            tsTryToParsePrimitiveTypeValues = sTryToParsePrimitiveTypeValues = null;
-            tsConvertObjectTypesIntoStringDictionary = sConvertObjectTypesIntoStringDictionary = null;
-            tsIncludeNullValues = sIncludeNullValues = null;
-            tsExcludeTypeInfo = sExcludeTypeInfo = null;
-            tsEmitCamelCaseNames = sEmitCamelCaseNames = null;
-            tsEmitLowercaseUnderscoreNames = sEmitLowercaseUnderscoreNames = null;
-            tsDateHandler = sDateHandler = null;
-            tsPreferInterfaces = sPreferInterfaces = null;
-            tsThrowOnDeserializationError = sThrowOnDeserializationError = null;
-            tsTypeAttr = sTypeAttr = null;
-            tsJsonTypeAttrInObject = sJsonTypeAttrInObject = null;
-            tsJsvTypeAttrInObject = sJsvTypeAttrInObject = null;
-            tsTypeWriter = sTypeWriter = null;
-            tsTypeFinder = sTypeFinder = null;
-			tsTreatEnumAsInteger = sTreatEnumAsInteger = null;
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.IncludePublicFields : null)
+                    ?? sIncludePublicFields
+                    ?? false;
+            }
+            set
+            {
+                if (!sIncludePublicFields.HasValue) sIncludePublicFields = value;
+            }
+        }
+
+        /// <summary>
+        /// Sets the maximum depth to avoid circular dependencies
+        /// </summary>
+        private static int? sMaxDepth;
+        public static int MaxDepth
+        {
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.MaxDepth : null)
+                    ?? sMaxDepth
+                    ?? int.MaxValue;
+            }
+            set
+            {
+                if (!sMaxDepth.HasValue) sMaxDepth = value;
+            }
+        }
+
+        /// <summary>
+        /// Set this to enable your own type construction provider.
+        /// This is helpful for integration with IoC containers where you need to call the container constructor.
+        /// Return null if you don't know how to construct the type and the parameterless constructor will be used.
+        /// </summary>
+        private static EmptyCtorFactoryDelegate sModelFactory;
+        public static EmptyCtorFactoryDelegate ModelFactory
+        {
+            get
+            {
+                return (JsConfigScope.Current != null ? JsConfigScope.Current.ModelFactory : null)
+                    ?? sModelFactory
+                    ?? null;
+            }
+            set
+            {
+                if (sModelFactory != null) sModelFactory = value;
+            }
+        }
+
+
+	    public static void Reset()
+        {
+            foreach (var rawSerializeType in HasSerializeFn.ToArray())
+            {
+                Reset(rawSerializeType);
+            }
+
+            sModelFactory = ReflectionExtensions.GetConstructorMethodToCache;
+            sTryToParsePrimitiveTypeValues = null;
+		    sTryToParseNumericType = null;
+            sConvertObjectTypesIntoStringDictionary = null;
+            sIncludeNullValues = null;
+            sExcludeTypeInfo = null;
+            sEmitCamelCaseNames = null;
+            sEmitLowercaseUnderscoreNames = null;
+            sDateHandler = null;
+            sTimeSpanHandler = null;
+            sPreferInterfaces = null;
+            sThrowOnDeserializationError = null;
+            sTypeAttr = null;
+            sJsonTypeAttrInObject = null;
+            sJsvTypeAttrInObject = null;
+            sTypeWriter = null;
+            sTypeFinder = null;
+			sTreatEnumAsInteger = null;
+            sAlwaysUseUtc = null;
+            sAssumeUtc = null;
+            sEscapeUnicode = null;
+            sIncludePublicFields = null;
             HasSerializeFn = new HashSet<Type>();
             TreatValueAsRefTypes = new HashSet<Type> { typeof(KeyValuePair<,>) };
             PropertyConvention = JsonPropertyConvention.ExactMatch;
+        }
+
+        public static void Reset(Type cachesForType)
+        {
+            typeof(JsConfig<>).MakeGenericType(new[] { cachesForType }).InvokeReset();
+        }
+
+        internal static void InvokeReset(this Type genericType)
+        {
+#if NETFX_CORE
+            MethodInfo methodInfo = genericType.GetTypeInfo().GetType().GetMethodInfo("Reset");
+            methodInfo.Invoke(null, null);
+#else
+            var methodInfo = genericType.GetMethod("Reset", BindingFlags.Static | BindingFlags.Public);
+            methodInfo.Invoke(null, null);
+#endif
         }
 
 #if MONOTOUCH
@@ -580,12 +790,6 @@ namespace ServiceStack.Text
 
 #endif
 
-        /// <summary>
-        /// Set this to enable your own type construction provider.
-        /// This is helpful for integration with IoC containers where you need to call the container constructor.
-        /// Return null if you don't know how to construct the type and the parameterless constructor will be used.
-        /// </summary>
-        public static EmptyCtorFactoryDelegate ModelFactory { get; set; }
     }
 
 #if MONOTOUCH
@@ -616,6 +820,8 @@ namespace ServiceStack.Text
         /// </summary>
         public static bool EmitCamelCaseNames = false;
 
+        public static bool EmitLowercaseUnderscoreNames = false;
+
         /// <summary>
         /// Define custom serialization fn for BCL Structs
         /// </summary>
@@ -630,13 +836,15 @@ namespace ServiceStack.Text
                     JsConfig.HasSerializeFn.Add(typeof(T));
                 else
                     JsConfig.HasSerializeFn.Remove(typeof(T));
+                
+                ClearFnCaches();
             }
         }
 
         /// <summary>
         /// Opt-in flag to set some Value Types to be treated as a Ref Type
         /// </summary>
-        public bool TreatValueAsRefTypes
+        public static bool TreatValueAsRefType
         {
             get { return JsConfig.TreatValueAsRefTypes.Contains(typeof(T)); }
             set
@@ -670,6 +878,8 @@ namespace ServiceStack.Text
                     JsConfig.HasSerializeFn.Add(typeof(T));
                 else
                     JsConfig.HasSerializeFn.Remove(typeof(T));
+
+                ClearFnCaches();
             }
         }
 
@@ -716,10 +926,15 @@ namespace ServiceStack.Text
             {
                 writer.Write(RawSerializeFn((T)obj));
             }
-            else
+            else if (SerializeFn != null)
             {
                 var serializer = JsWriter.GetTypeSerializer<TSerializer>();
-                serializer.WriteString(writer, SerializeFn((T)obj));
+                serializer.WriteString(writer, SerializeFn((T) obj));
+            }
+            else
+            {
+                var writerFn = JsonWriter.Instance.GetWriteFn<T>();
+                writerFn(writer, obj);
             }
         }
 
@@ -739,6 +954,18 @@ namespace ServiceStack.Text
                 return DeSerializeFn(serializer.UnescapeString(str));
             }
         }
+        
+        internal static void ClearFnCaches()
+        {
+            typeof(JsonWriter<>).MakeGenericType(new[] { typeof(T) }).InvokeReset();
+            typeof(JsvWriter<>).MakeGenericType(new[] { typeof(T) }).InvokeReset();
+        }
+
+        public static void Reset()
+        {
+            RawSerializeFn = null;
+            DeSerializeFn = null;
+        }    
     }
 
     public enum JsonPropertyConvention

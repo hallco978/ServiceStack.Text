@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Reflection;
 using ServiceStack.Text.Common;
 using ServiceStack.Text.Jsv;
 
@@ -77,20 +78,20 @@ namespace ServiceStack.Text
 
 		public static string SerializeToString<T>(T value)
 		{
-			if (value == null) return null;
+			if (value == null || value is Delegate) return null;
 			if (typeof(T) == typeof(string)) return value as string;
-            if (typeof(T) == typeof(object) || typeof(T).IsAbstract || typeof(T).IsInterface)
+            if (typeof(T) == typeof(object) || typeof(T).IsAbstract() || typeof(T).IsInterface())
             {
-                if (typeof(T).IsAbstract || typeof(T).IsInterface) JsState.IsWritingDynamic = true;
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface()) JsState.IsWritingDynamic = true;
                 var result = SerializeToString(value, value.GetType());
-                if (typeof(T).IsAbstract || typeof(T).IsInterface) JsState.IsWritingDynamic = false;
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface()) JsState.IsWritingDynamic = false;
                 return result;
             }
 
 			var sb = new StringBuilder();
 			using (var writer = new StringWriter(sb, CultureInfo.InvariantCulture))
 			{
-				JsvWriter<T>.WriteObject(writer, value);
+                JsvWriter<T>.WriteRootObject(writer, value);
 			}
 			return sb.ToString();
 		}
@@ -118,13 +119,13 @@ namespace ServiceStack.Text
 			}
 			if (typeof(T) == typeof(object))
 			{
-                if (typeof(T).IsAbstract || typeof(T).IsInterface) JsState.IsWritingDynamic = true;
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface()) JsState.IsWritingDynamic = true;
                 SerializeToWriter(value, value.GetType(), writer);
-                if (typeof(T).IsAbstract || typeof(T).IsInterface) JsState.IsWritingDynamic = false;
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface()) JsState.IsWritingDynamic = false;
                 return;
 			}
 
-			JsvWriter<T>.WriteObject(writer, value);
+            JsvWriter<T>.WriteRootObject(writer, value);
 		}
 
 		public static void SerializeToWriter(object value, Type type, TextWriter writer)
@@ -144,14 +145,14 @@ namespace ServiceStack.Text
 			if (value == null) return;
 			if (typeof(T) == typeof(object))
 			{
-                if (typeof(T).IsAbstract || typeof(T).IsInterface) JsState.IsWritingDynamic = true;
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface()) JsState.IsWritingDynamic = true;
                 SerializeToStream(value, value.GetType(), stream);
-                if (typeof(T).IsAbstract || typeof(T).IsInterface) JsState.IsWritingDynamic = false;
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface()) JsState.IsWritingDynamic = false;
                 return;
 			}
 
 			var writer = new StreamWriter(stream, UTF8EncodingWithoutBom);
-			JsvWriter<T>.WriteObject(writer, value);
+            JsvWriter<T>.WriteRootObject(writer, value);
 			writer.Flush();
 		}
 
@@ -211,7 +212,11 @@ namespace ServiceStack.Text
         /// </summary>
         public static void PrintDump<T>(this T instance)
         {
+#if NETFX_CORE
+            System.Diagnostics.Debug.WriteLine(SerializeAndFormat(instance));
+#else
             Console.WriteLine(SerializeAndFormat(instance));
+#endif
         }
 
         /// <summary>
@@ -219,17 +224,45 @@ namespace ServiceStack.Text
         /// </summary>
         public static void Print(this string text, params object[] args)
         {
+#if NETFX_CORE
+            if (args.Length > 0)
+                System.Diagnostics.Debug.WriteLine(text, args);
+            else
+                System.Diagnostics.Debug.WriteLine(text);
+#else
             if (args.Length > 0)
                 Console.WriteLine(text, args);
             else
                 Console.WriteLine(text);
+#endif
         }
 
 		public static string SerializeAndFormat<T>(this T instance)
 		{
+		    var fn = instance as Delegate;
+		    if (fn != null)
+                return Dump(fn);
+
 			var dtoStr = SerializeToString(instance);
 			var formatStr = JsvFormatter.Format(dtoStr);
 			return formatStr;
 		}
+
+        public static string Dump(this Delegate fn)
+        {
+            var method = fn.GetType().GetMethod("Invoke");
+            var sb = new StringBuilder();
+            foreach (var param in method.GetParameters())
+            {
+                if (sb.Length > 0)
+                    sb.Append(", ");
+
+                sb.AppendFormat("{0} {1}", param.ParameterType.Name, param.Name);
+            }
+
+            var info = "{0} {1}({2})".Fmt(method.ReturnType.Name, fn.Method.Name, sb);
+            return info;
+        }
+
 	}
 }

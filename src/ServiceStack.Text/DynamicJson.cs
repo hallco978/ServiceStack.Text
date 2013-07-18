@@ -1,4 +1,5 @@
 ﻿#if NET40
+using System;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
@@ -57,7 +58,7 @@ namespace ServiceStack.Text
             if (_hash.ContainsKey(name))
             {
                 var json = _hash[name].ToString();
-                if (json.TrimStart(' ').StartsWith("{"))
+                if (json.TrimStart(' ').StartsWith("{", StringComparison.Ordinal))
                 {
                     result = Deserialize(json);
                     return true;

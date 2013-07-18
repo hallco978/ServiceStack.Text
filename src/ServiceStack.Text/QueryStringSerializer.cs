@@ -11,12 +11,14 @@
 //
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using System.Linq;
 using ServiceStack.Text.Common;
 using ServiceStack.Text.Jsv;
 
@@ -36,9 +38,10 @@ namespace ServiceStack.Text
                 if (WriteFnCache.TryGetValue(type, out writeFn)) return writeFn;
 
                 var genericType = typeof(QueryStringWriter<>).MakeGenericType(type);
-                var mi = genericType.GetMethod("WriteFn", BindingFlags.NonPublic | BindingFlags.Static);
-                var writeFactoryFn = (Func<WriteObjectDelegate>)Delegate.CreateDelegate(
-                    typeof(Func<WriteObjectDelegate>), mi);
+                var mi = genericType.GetPublicStaticMethod("WriteFn");
+                var writeFactoryFn = (Func<WriteObjectDelegate>)mi.MakeDelegate(
+                    typeof(Func<WriteObjectDelegate>));
+
                 writeFn = writeFactoryFn();
 
                 Dictionary<Type, WriteObjectDelegate> snapshot, newCache;
@@ -91,7 +94,7 @@ namespace ServiceStack.Text
 	{
 		private static readonly WriteObjectDelegate CacheFn;
 
-		internal static WriteObjectDelegate WriteFn()
+	    public static WriteObjectDelegate WriteFn()
 		{
 			return CacheFn;
 		}
@@ -102,10 +105,19 @@ namespace ServiceStack.Text
 			{
 				CacheFn = QueryStringSerializer.WriteLateBoundObject;
 			}
+            else if (typeof (T).AssignableFrom(typeof (IDictionary))
+                || typeof (T).HasInterface(typeof (IDictionary)))
+            {
+                CacheFn = WriteIDictionary;
+            }
 			else
 			{
-				if (typeof(T).IsClass || typeof(T).IsInterface)
-				{
+                var isEnumerable = typeof(T).AssignableFrom(typeof(IEnumerable))
+                    || typeof(T).HasInterface(typeof(IEnumerable));
+
+                if ((typeof(T).IsClass() || typeof(T).IsInterface()) 
+                    && !isEnumerable)
+                {
 					var canWriteType = WriteType<T, JsvTypeSerializer>.Write;
 					if (canWriteType != null)
 					{
@@ -123,6 +135,57 @@ namespace ServiceStack.Text
 			if (writer == null) return;
 			CacheFn(writer, value);
 		}
-	}
+
+        private static readonly ITypeSerializer Serializer = JsvTypeSerializer.Instance;        
+        public static void WriteIDictionary(TextWriter writer, object oMap)
+        {
+            WriteObjectDelegate writeKeyFn = null;
+            WriteObjectDelegate writeValueFn = null;
+
+            try
+            {
+                JsState.QueryStringMode = true;
+
+                var map = (IDictionary)oMap;
+                var ranOnce = false;
+                foreach (var key in map.Keys)
+                {
+                    var dictionaryValue = map[key];
+                    if (dictionaryValue == null) continue;
+
+                    if (writeKeyFn == null)
+                    {
+                        var keyType = key.GetType();
+                        writeKeyFn = Serializer.GetWriteFn(keyType);
+                    }
+
+                    if (writeValueFn == null)
+                        writeValueFn = Serializer.GetWriteFn(dictionaryValue.GetType());
+
+                    if (ranOnce)
+                        writer.Write("&");
+                    else
+                        ranOnce = true;
+
+                    JsState.WritingKeyCount++;
+                    JsState.IsWritingValue = false;
+
+                    writeKeyFn(writer, key);
+
+                    JsState.WritingKeyCount--;
+
+                    writer.Write("=");
+
+                    JsState.IsWritingValue = true;
+                    writeValueFn(writer, dictionaryValue);
+                    JsState.IsWritingValue = false;
+                }
+            }
+            finally 
+            {
+                JsState.QueryStringMode = false;
+            }
+        }
+    }
 	
 }

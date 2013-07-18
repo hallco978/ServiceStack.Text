@@ -11,6 +11,7 @@
 //
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
@@ -32,8 +33,8 @@ namespace ServiceStack.Text.Json
             if (parseFactoryFn != null) return parseFactoryFn();
 
             var genericType = typeof(JsonReader<>).MakeGenericType(type);
-            var mi = genericType.GetMethod("GetParseFn", BindingFlags.Public | BindingFlags.Static);
-            parseFactoryFn = (ParseFactoryDelegate)Delegate.CreateDelegate(typeof(ParseFactoryDelegate), mi);
+            var mi = genericType.GetPublicStaticMethod("GetParseFn");
+            parseFactoryFn = (ParseFactoryDelegate)mi.MakeDelegate(typeof(ParseFactoryDelegate));
 
             Dictionary<Type, ParseFactoryDelegate> snapshot, newCache;
             do
@@ -67,8 +68,8 @@ namespace ServiceStack.Text.Json
 		{
 			if (ReadFn == null)
 			{
-                if (typeof(T).IsAbstract || typeof(T).IsInterface)
-				{
+                if (typeof(T).IsAbstract() || typeof(T).IsInterface())
+                {
 					if (string.IsNullOrEmpty(value)) return null;
 					var concreteType = DeserializeType<JsonTypeSerializer>.ExtractType(value);
 					if (concreteType != null)

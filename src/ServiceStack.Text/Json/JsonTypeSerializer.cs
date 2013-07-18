@@ -115,7 +115,9 @@ namespace ServiceStack.Text.Json
 
         public void WriteDateTime(TextWriter writer, object oDateTime)
         {
-            WriteRawString(writer, DateTimeSerializer.ToWcfJsonDate((DateTime)oDateTime));
+            writer.Write(JsWriter.QuoteString);
+            DateTimeSerializer.WriteWcfJsonDate(writer, (DateTime)oDateTime);
+            writer.Write(JsWriter.QuoteString);
         }
 
         public void WriteNullableDateTime(TextWriter writer, object dateTime)
@@ -128,7 +130,9 @@ namespace ServiceStack.Text.Json
 
         public void WriteDateTimeOffset(TextWriter writer, object oDateTimeOffset)
         {
-            WriteRawString(writer, DateTimeSerializer.ToWcfJsonDateTimeOffset((DateTimeOffset)oDateTimeOffset));
+            writer.Write(JsWriter.QuoteString);
+            DateTimeSerializer.WriteWcfJsonDateTimeOffset(writer, (DateTimeOffset)oDateTimeOffset);
+            writer.Write(JsWriter.QuoteString);
         }
 
         public void WriteNullableDateTimeOffset(TextWriter writer, object dateTimeOffset)
@@ -176,7 +180,7 @@ namespace ServiceStack.Text.Json
             if (charValue == null)
                 writer.Write(JsonUtils.Null);
             else
-                WriteRawString(writer, ((char)charValue).ToString(CultureInfo.InvariantCulture));
+                WriteRawString(writer, ((char)charValue).ToString());
         }
 
         public void WriteByte(TextWriter writer, object byteValue)
@@ -284,10 +288,10 @@ namespace ServiceStack.Text.Json
         public void WriteEnum(TextWriter writer, object enumValue)
         {
             if (enumValue == null) return;
-			if (JsConfig.TreatEnumAsInteger)
-				JsWriter.WriteEnumFlags(writer, enumValue);
-			else
-				WriteRawString(writer, enumValue.ToString());
+            if (GetTypeInfo(enumValue.GetType()).IsNumeric)
+                JsWriter.WriteEnumFlags(writer, enumValue);
+            else
+                WriteRawString(writer, enumValue.ToString());
         }
 
         public void WriteEnumFlags(TextWriter writer, object enumFlagValue)
@@ -322,9 +326,8 @@ namespace ServiceStack.Text.Json
             return string.IsNullOrEmpty(value) ? value : ParseRawString(value);
         }
 
-        internal static bool IsEmptyMap(string value)
+        internal static bool IsEmptyMap(string value, int i = 1)
         {
-            var i = 1;
             for (; i < value.Length; i++) { var c = value[i]; if (c >= WhiteSpaceFlags.Length || !WhiteSpaceFlags[c]) break; } //Whitespace inline
             if (value.Length == i) return true;
             return value[i++] == JsWriter.MapEndChar;
@@ -400,71 +403,120 @@ namespace ServiceStack.Text.Json
                 }
             }
 
-            var sb = new StringBuilder(jsonLength);
+            return Unescape(json);
+        }
 
-        	while (true)
+
+        public static string Unescape(string input)
+        {
+            var length = input.Length;
+            int start = 0;
+            int count = 0; 
+            StringBuilder output = new StringBuilder(length);
+            for ( ; count < length; )
             {
-                if (index == jsonLength) break;
-
-                char c = json[index++];
-                if (c == JsonUtils.QuoteChar) break;
-
-                if (c == JsonUtils.EscapeChar)
+                if (input[count] == JsonUtils.QuoteChar)
                 {
-                    if (index == jsonLength)
+                    if (start != count)
                     {
-                        break;
+                        output.Append(input, start, count - start);
+                    }                    
+                    count++;
+                    start = count;
+                    continue;
+                }
+
+                if (input[count] == JsonUtils.EscapeChar)
+                {
+                    if (start != count)
+                    {
+                        output.Append(input, start, count - start);
                     }
-                    c = json[index++];
+                    start = count;
+                    count++;
+                    if (count >= length) continue;
+
+                    //we will always be parsing an escaped char here
+                    var c = input[count];
+
                     switch (c)
                     {
-                        case '"':
-                            sb.Append('"');
-                            break;
-                        case '\\':
-                            sb.Append('\\');
-                            break;
-                        case '/':
-                            sb.Append('/');
+                        case 'a':
+                            output.Append('\a');
+                            count++;
                             break;
                         case 'b':
-                            sb.Append('\b');
+                            output.Append('\b');
+                            count++;
                             break;
                         case 'f':
-                            sb.Append('\f');
+                            output.Append('\f');
+                            count++;
                             break;
                         case 'n':
-                            sb.Append('\n');
+                            output.Append('\n');
+                            count++;
                             break;
                         case 'r':
-                            sb.Append('\r');
+                            output.Append('\r');
+                            count++;
+                            break;
+                        case 'v':
+                            output.Append('\v');
+                            count++;
                             break;
                         case 't':
-                            sb.Append('\t');
+                            output.Append('\t');
+                            count++;
                             break;
                         case 'u':
-                            var remainingLength = jsonLength - index;
-                            if (remainingLength >= 4)
+                            if (count + 4 < length)
                             {
-                                var unicodeString = json.Substring(index, 4);
+                                var unicodeString = input.Substring(count+1, 4);
                                 var unicodeIntVal = UInt32.Parse(unicodeString, NumberStyles.HexNumber);
-                                sb.Append(ConvertFromUtf32((int) unicodeIntVal));
-                                index += 4;
+                                output.Append(JsonTypeSerializer.ConvertFromUtf32((int) unicodeIntVal));
+                                count += 5;
                             }
                             else
                             {
-                                break;
+                                output.Append(c);
                             }
                             break;
+                        case 'x':
+                            if (count + 4 < length)
+                            {
+                                var unicodeString = input.Substring(count+1, 4);
+                                var unicodeIntVal = UInt32.Parse(unicodeString, NumberStyles.HexNumber);
+                                output.Append(JsonTypeSerializer.ConvertFromUtf32((int) unicodeIntVal));
+                                count += 5;
+                            }
+                            else
+                            if (count + 2 < length)
+                            {
+                                var unicodeString = input.Substring(count+1, 2);
+                                var unicodeIntVal = UInt32.Parse(unicodeString, NumberStyles.HexNumber);
+                                output.Append(JsonTypeSerializer.ConvertFromUtf32((int) unicodeIntVal));
+                                count += 3;
+                            }
+                            else
+                            {
+                                output.Append(input, start, count - start);
+                            }
+                            break;
+                        default:
+                            output.Append(c);
+                            count++;
+                            break;
                     }
+                    start = count;
                 }
                 else
                 {
-                    sb.Append(c);
+                    count++;
                 }
             }
-
-            return sb.ToString();
+            output.Append(input, start, length - start);
+            return output.ToString();
         }
 
         /// <summary>
@@ -473,7 +525,7 @@ namespace ServiceStack.Text.Json
         /// </summary>
         /// <param name="utf32"></param>
         /// <returns></returns>
-        private static string ConvertFromUtf32(int utf32)
+        public static string ConvertFromUtf32(int utf32)
         {
             if (utf32 < 0 || utf32 > 0x10FFFF)
                 throw new ArgumentOutOfRangeException("utf32", "The argument must be from 0 to 0x10FFFF.");
@@ -497,7 +549,41 @@ namespace ServiceStack.Text.Json
 
         public string EatMapKey(string value, ref int i)
         {
-            return ParseJsonString(value, ref i);
+            var valueLength = value.Length;
+            for (; i < value.Length; i++) { var c = value[i]; if (c >= WhiteSpaceFlags.Length || !WhiteSpaceFlags[c]) break; } //Whitespace inline
+
+            var tokenStartPos = i;
+            var valueChar = value[i];
+            var withinQuotes = false;
+            var endsToEat = 1;
+
+            switch (valueChar)
+            {
+                //If we are at the end, return.
+                case JsWriter.ItemSeperator:
+                case JsWriter.MapEndChar:
+                    return null;
+
+                //Is Within Quotes, i.e. "..."
+                case JsWriter.QuoteChar:
+                    return ParseString(value, ref i);
+            }
+            
+            //Is Value
+            while (++i < valueLength)
+            {
+                valueChar = value[i];
+
+                if (valueChar == JsWriter.ItemSeperator
+                    //If it doesn't have quotes it's either a keyword or number so also has a ws boundary
+                    || (valueChar < WhiteSpaceFlags.Length && WhiteSpaceFlags[valueChar])
+                )
+                {
+                    break;
+                }
+            }
+
+            return value.Substring(tokenStartPos, i - tokenStartPos);
         }
 
         public bool EatMapKeySeperator(string value, ref int i)

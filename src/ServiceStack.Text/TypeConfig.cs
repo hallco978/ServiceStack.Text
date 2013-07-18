@@ -9,12 +9,14 @@ namespace ServiceStack.Text
 		internal readonly Type Type;
 		internal bool EnableAnonymousFieldSetterses;
 		internal PropertyInfo[] Properties;
+		internal FieldInfo[] Fields;
 
 		internal TypeConfig(Type type)
 		{
 			Type = type;
 			EnableAnonymousFieldSetterses = false;
 			Properties = new PropertyInfo[0];
+			Fields = new FieldInfo[0];
 		}
 	}
 
@@ -28,6 +30,12 @@ namespace ServiceStack.Text
 			set { config.Properties = value; }
 		}
 
+		public static FieldInfo[] Fields
+		{
+			get { return config.Fields; }
+			set { config.Fields = value; }
+		}
+
 		public static bool EnableAnonymousFieldSetters
 		{
 			get { return config.EnableAnonymousFieldSetterses; }
@@ -39,10 +47,13 @@ namespace ServiceStack.Text
 			config = new TypeConfig(typeof(T));
 			
 			var excludedProperties = JsConfig<T>.ExcludePropertyNames ?? new string[0];
-			var properties = excludedProperties.Any() 
-				? config.Type.GetSerializableProperties().Where(x => !excludedProperties.Contains(x.Name))
-				: config.Type.GetSerializableProperties();
-			Properties = properties.Where(x => x.GetIndexParameters().Length == 0).ToArray();
+
+            var properties = excludedProperties.Any()
+                ? config.Type.GetSerializableProperties().Where(x => !excludedProperties.Contains(x.Name))
+                : config.Type.GetSerializableProperties();
+            Properties = properties.Where(x => x.GetIndexParameters().Length == 0).ToArray();
+
+			Fields = config.Type.GetSerializableFields().ToArray();
 		}
 
 		internal static TypeConfig GetState()

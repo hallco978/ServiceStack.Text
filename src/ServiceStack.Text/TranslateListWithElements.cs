@@ -15,6 +15,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
+using System.Linq;
 using ServiceStack.Text.Common;
 
 namespace ServiceStack.Text
@@ -31,8 +32,8 @@ namespace ServiceStack.Text
                 return translateToFn(from, toInstanceOfType);
 
             var genericType = typeof(TranslateListWithElements<>).MakeGenericType(elementType);
-            var mi = genericType.GetMethod("LateBoundTranslateToGenericICollection", BindingFlags.Static | BindingFlags.Public);
-            translateToFn = (ConvertInstanceDelegate)Delegate.CreateDelegate(typeof(ConvertInstanceDelegate), mi);
+            var mi = genericType.GetPublicStaticMethod("LateBoundTranslateToGenericICollection");
+            translateToFn = (ConvertInstanceDelegate)mi.MakeDelegate(typeof(ConvertInstanceDelegate));
 
             Dictionary<Type, ConvertInstanceDelegate> snapshot, newCache;
             do
@@ -57,10 +58,10 @@ namespace ServiceStack.Text
             ConvertInstanceDelegate translateToFn;
             if (TranslateConvertibleICollectionCache.TryGetValue(typeKey, out translateToFn)) return translateToFn(from, toInstanceOfType);
 
-            var toElementType = toInstanceOfType.GetGenericType().GetGenericArguments()[0];
+            var toElementType = toInstanceOfType.GetGenericType().GenericTypeArguments()[0];
             var genericType = typeof(TranslateListWithConvertibleElements<,>).MakeGenericType(fromElementType, toElementType);
-            var mi = genericType.GetMethod("LateBoundTranslateToGenericICollection", BindingFlags.Static | BindingFlags.Public);
-            translateToFn = (ConvertInstanceDelegate)Delegate.CreateDelegate(typeof(ConvertInstanceDelegate), mi);
+            var mi = genericType.GetPublicStaticMethod("LateBoundTranslateToGenericICollection");
+            translateToFn = (ConvertInstanceDelegate)mi.MakeDelegate(typeof(ConvertInstanceDelegate));
 
             Dictionary<ConvertibleTypeKey, ConvertInstanceDelegate> snapshot, newCache;
             do
@@ -144,8 +145,8 @@ namespace ServiceStack.Text
 	{
 		public static object CreateInstance(Type toInstanceOfType)
 		{
-			if (toInstanceOfType.IsGenericType)
-			{
+            if (toInstanceOfType.IsGeneric())
+            {
 				if (toInstanceOfType.HasAnyTypeDefinitionsOf(
 					typeof(ICollection<>), typeof(IList<>)))
 				{

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -25,9 +26,10 @@ namespace ServiceStack.Text
                 if (WriteFnCache.TryGetValue(type, out writeFn)) return writeFn;
 
                 var genericType = typeof(CsvSerializer<>).MakeGenericType(type);
-                var mi = genericType.GetMethod("WriteFn", BindingFlags.Public | BindingFlags.Static);
-                var writeFactoryFn = (Func<WriteObjectDelegate>)Delegate.CreateDelegate(
-                    typeof(Func<WriteObjectDelegate>), mi);
+                var mi = genericType.GetPublicStaticMethod("WriteFn");
+                var writeFactoryFn = (Func<WriteObjectDelegate>)mi.MakeDelegate(
+                    typeof(Func<WriteObjectDelegate>));
+
                 writeFn = writeFactoryFn();
 
                 Dictionary<Type, WriteObjectDelegate> snapshot, newCache;
@@ -138,8 +140,8 @@ namespace ServiceStack.Text
 			Type bestCandidateEnumerableType = null;
 			PropertyInfo bestCandidate = null;
 
-			if (typeof(T).IsValueType)
-			{
+            if (typeof(T).IsValueType())
+            {
 				return JsvWriter<T>.WriteObject;
 			}
 
@@ -147,8 +149,8 @@ namespace ServiceStack.Text
 			bestCandidateEnumerableType = typeof(T).GetTypeWithGenericTypeDefinitionOf(typeof(IEnumerable<>));
 			if (bestCandidateEnumerableType != null)
 			{
-				var elementType = bestCandidateEnumerableType.GetGenericArguments()[0];
-				writeElementFn = CreateWriteFn(elementType);
+                var elementType = bestCandidateEnumerableType.GenericTypeArguments()[0];
+                writeElementFn = CreateWriteFn(elementType);
 
 				return WriteEnumerableType;
 			}
@@ -162,8 +164,8 @@ namespace ServiceStack.Text
 					if (propertyInfo.Name == IgnoreResponseStatus) continue;
 
 					if (propertyInfo.PropertyType == typeof(string)
-						|| propertyInfo.PropertyType.IsValueType
-						|| propertyInfo.PropertyType == typeof(byte[])) continue;
+                        || propertyInfo.PropertyType.IsValueType()
+                        || propertyInfo.PropertyType == typeof(byte[])) continue;
 
 					if (firstCandidate == null)
 					{
@@ -193,9 +195,8 @@ namespace ServiceStack.Text
 			if (bestCandidateEnumerableType != null)
 			{
 				valueGetter = bestCandidate.GetValueGetter(typeof(T));
-
-				var elementType = bestCandidateEnumerableType.GetGenericArguments()[0];
-				writeElementFn = CreateWriteFn(elementType);
+                var elementType = bestCandidateEnumerableType.GenericTypeArguments()[0];
+                writeElementFn = CreateWriteFn(elementType);
 
 				return WriteEnumerableProperty;
 			}
@@ -220,13 +221,10 @@ namespace ServiceStack.Text
 		private static WriteObjectDelegate CreateCsvWriterFn(Type elementType, string methodName)
 		{
 			var genericType = typeof(CsvWriter<>).MakeGenericType(elementType);
-			var mi = genericType.GetMethod(methodName, 
-				BindingFlags.Static | BindingFlags.Public);
-
-			var writeFn = (WriteObjectDelegate)Delegate.CreateDelegate(typeof(WriteObjectDelegate), mi);
-
-			return writeFn;
-		}
+            var mi = genericType.GetPublicStaticMethod(methodName);
+            var writeFn = (WriteObjectDelegate)mi.MakeDelegate(typeof(WriteObjectDelegate));
+            return writeFn;
+        }
 
 		public static void WriteEnumerableType(TextWriter writer, object obj)
 		{

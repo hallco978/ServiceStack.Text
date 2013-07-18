@@ -13,6 +13,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using ServiceStack.Text.Common;
@@ -25,6 +26,19 @@ namespace ServiceStack.Text.Json
 
 		private static Dictionary<Type, WriteObjectDelegate> WriteFnCache = new Dictionary<Type, WriteObjectDelegate>();
 
+        internal static void RemoveCacheFn(Type forType)
+        {
+            Dictionary<Type, WriteObjectDelegate> snapshot, newCache;
+            do
+            {
+                snapshot = WriteFnCache;
+                newCache = new Dictionary<Type, WriteObjectDelegate>(WriteFnCache);
+                newCache.Remove(forType);
+                
+            } while (!ReferenceEquals(
+                Interlocked.CompareExchange(ref WriteFnCache, newCache, snapshot), snapshot));
+        }
+
 		public static WriteObjectDelegate GetWriteFn(Type type)
 		{
 			try
@@ -33,9 +47,9 @@ namespace ServiceStack.Text.Json
 				if (WriteFnCache.TryGetValue(type, out writeFn)) return writeFn;
 
 				var genericType = typeof(JsonWriter<>).MakeGenericType(type);
-				var mi = genericType.GetMethod("WriteFn", BindingFlags.Public | BindingFlags.Static);
-				var writeFactoryFn = (Func<WriteObjectDelegate>)Delegate.CreateDelegate(typeof(Func<WriteObjectDelegate>), mi);
-				writeFn = writeFactoryFn();
+                var mi = genericType.GetPublicStaticMethod("WriteFn");
+                var writeFactoryFn = (Func<WriteObjectDelegate>)mi.MakeDelegate(typeof(Func<WriteObjectDelegate>));
+                writeFn = writeFactoryFn();
 
 				Dictionary<Type, WriteObjectDelegate> snapshot, newCache;
 				do
@@ -66,9 +80,9 @@ namespace ServiceStack.Text.Json
 				if (JsonTypeInfoCache.TryGetValue(type, out writeFn)) return writeFn;
 
 				var genericType = typeof(JsonWriter<>).MakeGenericType(type);
-				var mi = genericType.GetMethod("GetTypeInfo", BindingFlags.Public | BindingFlags.Static);
-				var writeFactoryFn = (Func<TypeInfo>)Delegate.CreateDelegate(typeof(Func<TypeInfo>), mi);
-				writeFn = writeFactoryFn();
+                var mi = genericType.GetPublicStaticMethod("GetTypeInfo");
+                var writeFactoryFn = (Func<TypeInfo>)mi.MakeDelegate(typeof(Func<TypeInfo>));
+                writeFn = writeFactoryFn();
 
 				Dictionary<Type, TypeInfo> snapshot, newCache;
 				do
@@ -99,7 +113,7 @@ namespace ServiceStack.Text.Json
 
 			var type = value.GetType();
 			var writeFn = type == typeof(object)
-				? WriteType<object, JsonTypeSerializer>.WriteEmptyType
+				? WriteType<object, JsonTypeSerializer>.WriteObjectType
 				: GetWriteFn(type);
 
 			var prevState = JsState.IsWritingDynamic;
@@ -116,8 +130,9 @@ namespace ServiceStack.Text.Json
 
 	internal class TypeInfo
 	{
-		internal bool EncodeMapKey;
-	}
+        internal bool EncodeMapKey;
+        internal bool IsNumeric;
+    }
 
 	/// <summary>
 	/// Implement the serializer using a more static approach
@@ -126,7 +141,16 @@ namespace ServiceStack.Text.Json
 	internal static class JsonWriter<T>
 	{
 		internal static TypeInfo TypeInfo;
-		private static readonly WriteObjectDelegate CacheFn;
+		private static WriteObjectDelegate CacheFn;
+
+        public static void Reset()
+        {
+            JsonWriter.RemoveCacheFn(typeof(T));
+
+            CacheFn = typeof(T) == typeof(object) 
+                ? JsonWriter.WriteLateBoundObject 
+                : JsonWriter.Instance.GetWriteFn<T>();
+        }
 
 		public static WriteObjectDelegate WriteFn()
 		{
@@ -140,8 +164,10 @@ namespace ServiceStack.Text.Json
 
 		static JsonWriter()
 		{
+		    var isNumeric = typeof(T).IsNumericType();
 			TypeInfo = new TypeInfo {
-				EncodeMapKey = typeof(T) == typeof(bool) || typeof(T).IsNumericType()
+                EncodeMapKey = typeof(T) == typeof(bool) || isNumeric,
+                IsNumeric = isNumeric
 			};
 
             CacheFn = typeof(T) == typeof(object) 
@@ -149,13 +175,32 @@ namespace ServiceStack.Text.Json
                 : JsonWriter.Instance.GetWriteFn<T>();
 		}
 
-	    public static void WriteObject(TextWriter writer, object value)
-		{
+        public static void WriteObject(TextWriter writer, object value)
+        {
 #if MONOTOUCH
 			if (writer == null) return;
 #endif
-			CacheFn(writer, value);
-		}
-	}
+            try
+            {
+                if (++JsState.Depth > JsConfig.MaxDepth)
+                    return;
+
+                CacheFn(writer, value);
+            }
+            finally
+            {
+                JsState.Depth--;
+            }
+        }
+
+        public static void WriteRootObject(TextWriter writer, object value)
+        {
+#if MONOTOUCH
+			if (writer == null) return;
+#endif
+            JsState.Depth = 0;
+            CacheFn(writer, value);
+        }
+    }
 
 }

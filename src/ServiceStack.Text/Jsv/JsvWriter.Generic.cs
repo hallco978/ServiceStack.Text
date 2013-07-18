@@ -13,6 +13,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using ServiceStack.Text.Common;
@@ -24,6 +25,19 @@ namespace ServiceStack.Text.Jsv
 		public static readonly JsWriter<JsvTypeSerializer> Instance = new JsWriter<JsvTypeSerializer>();
 
         private static Dictionary<Type, WriteObjectDelegate> WriteFnCache = new Dictionary<Type, WriteObjectDelegate>();
+        
+        internal static void RemoveCacheFn(Type forType)
+        {
+            Dictionary<Type, WriteObjectDelegate> snapshot, newCache;
+            do
+            {
+                snapshot = WriteFnCache;
+                newCache = new Dictionary<Type, WriteObjectDelegate>(WriteFnCache);
+                newCache.Remove(forType);
+                
+            } while (!ReferenceEquals(
+                Interlocked.CompareExchange(ref WriteFnCache, newCache, snapshot), snapshot));
+        }
 
 		public static WriteObjectDelegate GetWriteFn(Type type)
 		{
@@ -33,8 +47,9 @@ namespace ServiceStack.Text.Jsv
                 if (WriteFnCache.TryGetValue(type, out writeFn)) return writeFn;
 
                 var genericType = typeof(JsvWriter<>).MakeGenericType(type);
-                var mi = genericType.GetMethod("WriteFn", BindingFlags.Public | BindingFlags.Static);
-                var writeFactoryFn = (Func<WriteObjectDelegate>)Delegate.CreateDelegate(typeof(Func<WriteObjectDelegate>), mi);
+                var mi = genericType.GetPublicStaticMethod("WriteFn");
+                var writeFactoryFn = (Func<WriteObjectDelegate>)mi.MakeDelegate(typeof(Func<WriteObjectDelegate>));
+
                 writeFn = writeFactoryFn();
 
                 Dictionary<Type, WriteObjectDelegate> snapshot, newCache;
@@ -61,7 +76,7 @@ namespace ServiceStack.Text.Jsv
 			if (value == null) return;
 			var type = value.GetType();
 			var writeFn = type == typeof(object)
-                ? WriteType<object, JsvTypeSerializer>.WriteEmptyType
+                ? WriteType<object, JsvTypeSerializer>.WriteObjectType
 				: GetWriteFn(type);
 
 			var prevState = JsState.IsWritingDynamic;
@@ -82,7 +97,16 @@ namespace ServiceStack.Text.Jsv
 	/// <typeparam name="T"></typeparam>
 	internal static class JsvWriter<T>
 	{
-		private static readonly WriteObjectDelegate CacheFn;
+		private static WriteObjectDelegate CacheFn;
+        
+        public static void Reset()
+        {
+            JsvWriter.RemoveCacheFn(typeof(T));
+            
+            CacheFn = typeof(T) == typeof(object) 
+                ? JsvWriter.WriteLateBoundObject 
+                : JsvWriter.Instance.GetWriteFn<T>();
+        }
 
 		public static WriteObjectDelegate WriteFn()
 		{
@@ -96,13 +120,32 @@ namespace ServiceStack.Text.Jsv
                 : JsvWriter.Instance.GetWriteFn<T>();
 		}
 
-	    public static void WriteObject(TextWriter writer, object value)
-		{
+        public static void WriteObject(TextWriter writer, object value)
+        {
 #if MONOTOUCH
 			if (writer == null) return;
 #endif
-			CacheFn(writer, value);
-		}
+            try
+            {
+                if (++JsState.Depth > JsConfig.MaxDepth)
+                    return;
 
-	}
+                CacheFn(writer, value);
+            }
+            finally 
+            {
+                JsState.Depth--;
+            }
+        }
+
+        public static void WriteRootObject(TextWriter writer, object value)
+        {
+#if MONOTOUCH
+			if (writer == null) return;
+#endif
+            JsState.Depth = 0;
+            CacheFn(writer, value);
+        }
+
+    }
 }

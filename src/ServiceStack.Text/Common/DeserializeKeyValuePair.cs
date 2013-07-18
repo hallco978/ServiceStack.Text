@@ -17,6 +17,7 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
+using System.Linq;
 using ServiceStack.Text.Json;
 
 namespace ServiceStack.Text.Common
@@ -33,8 +34,7 @@ namespace ServiceStack.Text.Common
         {
             var mapInterface = type.GetTypeWithGenericInterfaceOf(typeof(KeyValuePair<,>));
 
-            var keyValuePairArgs = mapInterface.GetGenericArguments();
-
+            var keyValuePairArgs = mapInterface.GenericTypeArguments();
             var keyTypeParseMethod = Serializer.GetParseFn(keyValuePairArgs[KeyIndex]);
             if (keyTypeParseMethod == null) return null;
 
@@ -46,16 +46,16 @@ namespace ServiceStack.Text.Common
 
             return value => ParseKeyValuePairType(value, createMapType, keyValuePairArgs, keyTypeParseMethod, valueTypeParseMethod);
         }
-        
+
         public static object ParseKeyValuePair<TKey, TValue>(
             string value, Type createMapType,
             ParseStringDelegate parseKeyFn, ParseStringDelegate parseValueFn)
         {
             if (value == null) return default(KeyValuePair<TKey, TValue>);
 
-            var index = 1;
+            var index = VerifyAndGetStartIndex(value, createMapType);
 
-            if (JsonTypeSerializer.IsEmptyMap(value)) return new KeyValuePair<TKey, TValue>();
+            if (JsonTypeSerializer.IsEmptyMap(value, index)) return new KeyValuePair<TKey, TValue>();
             var keyValue = default(TKey);
             var valueValue = default(TValue);
 
@@ -66,16 +66,28 @@ namespace ServiceStack.Text.Common
                 Serializer.EatMapKeySeperator(value, ref index);
                 var keyElementValue = Serializer.EatTypeValue(value, ref index);
 
-                if (string.Compare(key, "key", StringComparison.InvariantCultureIgnoreCase) == 0)
+                if (key.CompareIgnoreCase("key") == 0)
                     keyValue = (TKey)parseKeyFn(keyElementValue);
-                else if (string.Compare(key, "value", StringComparison.InvariantCultureIgnoreCase) == 0)
-                    valueValue = (TValue) parseValueFn(keyElementValue);
+                else if (key.CompareIgnoreCase("value") == 0)
+                    valueValue = (TValue)parseValueFn(keyElementValue);
                 else
                     throw new SerializationException("Incorrect KeyValuePair property: " + key);
                 Serializer.EatItemSeperatorOrMapEndChar(value, ref index);
             }
 
             return new KeyValuePair<TKey, TValue>(keyValue, valueValue);
+        }
+
+        private static int VerifyAndGetStartIndex(string value, Type createMapType)
+        {
+            var index = 0;
+            if (!Serializer.EatMapStartChar(value, ref index))
+            {
+                //Don't throw ex because some KeyValueDataContractDeserializer don't have '{}'
+                Tracer.Instance.WriteDebug("WARN: Map definitions should start with a '{0}', expecting serialized type '{1}', got string starting with: {2}",
+                                           JsWriter.MapStartChar, createMapType != null ? createMapType.Name : "Dictionary<,>", value.Substring(0, value.Length < 50 ? value.Length : 50));
+            }
+            return index;
         }
 
         private static Dictionary<string, ParseKeyValuePairDelegate> ParseDelegateCache
@@ -93,9 +105,9 @@ namespace ServiceStack.Text.Common
             if (ParseDelegateCache.TryGetValue(key, out parseDelegate))
                 return parseDelegate(value, createMapType, keyParseFn, valueParseFn);
 
-            var mi = typeof(DeserializeKeyValuePair<TSerializer>).GetMethod("ParseKeyValuePair", BindingFlags.Static | BindingFlags.Public);
+            var mi = typeof(DeserializeKeyValuePair<TSerializer>).GetPublicStaticMethod("ParseKeyValuePair");
             var genericMi = mi.MakeGenericMethod(argTypes);
-            parseDelegate = (ParseKeyValuePairDelegate)Delegate.CreateDelegate(typeof(ParseKeyValuePairDelegate), genericMi);
+            parseDelegate = (ParseKeyValuePairDelegate)genericMi.MakeDelegate(typeof(ParseKeyValuePairDelegate));
 
             Dictionary<string, ParseKeyValuePairDelegate> snapshot, newCache;
             do
